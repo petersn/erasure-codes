@@ -74,7 +74,7 @@ void erasure_code_build_table(
     }
 }
 
-void erasure_code_process(
+__attribute__((noinline)) void erasure_code_process(
     uint8_t *table,
     int input_count,
     int output_count,
