@@ -44,46 +44,86 @@ void erasure_code_build_table(
         }
     }
 }
-
+__attribute__((alwaysinline)) inline __m256i cond_xor(
+    __m256i accum,
+    uint32_t masks,
+    int bit_pos,
+    __m256i bit
+) {
+    if (bit_pos > 7) {
+        masks >>= bit_pos - 7;
+    } else {
+        masks <<= 7 - bit_pos;
+    }
+    __m256i full_mask = _mm256_set1_epi8(masks);
+    __m256i xor = _mm256_xor_si256(accum, bit);
+    return _mm256_blendv_epi8(accum, xor, full_mask);
+    //return _mm256_xor_si256(accum, (masks & (1u << bit_pos)) ? bit : _mm256_setzero_si256());
+}
 
 __attribute__((noinline)) void erasure_code_process(
-    uint8_t *table,
+    uint8_t *restrict table,
     int input_count,
     int output_count,
     const uint8_t *restrict*restrict input_shard_data,
     uint8_t *restrict*restrict output_shard_data,
     size_t shard_length
 ) {
+    // Check the alignment on the input and output shards.
+    for (int i = 0; i < input_count; i++)
+        assert(((uintptr_t)input_shard_data[i] & 0x1f) == 0);
+    for (int i = 0; i < output_count; i++)
+        assert(((uintptr_t)output_shard_data[i] & 0x1f) == 0);
     assert(shard_length % 32 == 0);
-    const uint64_t *restrict*restrict input64 = (const uint64_t *restrict*restrict)input_shard_data;
-    uint64_t *restrict*restrict output64 = (uint64_t *restrict*restrict)output_shard_data;
-    size_t segments = shard_length / 32;
-    //const uint64_t *input64_i = input64[i];
+    const __m256i *restrict*restrict input64 = (const __m256i *restrict*restrict)input_shard_data;
+    __m256i *restrict*restrict output64 = (__m256i *restrict*restrict)output_shard_data;
+    uint32_t *restrict table32 = (uint32_t *restrict)table;
+    size_t segments = shard_length / 128;
+    //const __m256i *input64_i = input64[i];
     for (int j = 0; j < output_count; j++) {
-    //uint64_t *output64_j = output64[j];
+    //__m256i *output64_j = output64[j];
         for (int segment = 0; segment < segments; segment++) {
-            uint64_t *restrict output_ptr = output64[j] + segment * 4;
-            uint64_t a = 0, b = 0, c = 0, d = 0;
+            __m256i *restrict output_ptr = output64[j] + segment * 4;
+            __m256i a = _mm256_setzero_si256(), b = _mm256_setzero_si256(), c = _mm256_setzero_si256(), d = _mm256_setzero_si256();
             for (int i = 0; i < input_count; i++) {
-                const uint64_t *restrict input_ptr = input64[i] + segment * 4;
-                for (int bit_in = 0; bit_in < 4; bit_in++) {
-                    uint8_t mask = table[i * output_count * 4 + j * 4 + bit_in];
-                    uint64_t bit = input_ptr[bit_in];
-                    //a ^= bit * (mask & 1);
-                    //b ^= bit * ((mask >> 1) & 1);
-                    //c ^= bit * ((mask >> 2) & 1);
-                    //d ^= bit * ((mask >> 3) & 1);
-                    a ^= (mask & 1) ? bit : 0;
-                    b ^= (mask & 2) ? bit : 0;
-                    c ^= (mask & 4) ? bit : 0;
-                    d ^= (mask & 8) ? bit : 0;
-                    /*
-                    if (mask & 1) output_ptr[0] ^= input_ptr[bit_in];
-                    if (mask & 2) output_ptr[1] ^= input_ptr[bit_in];
-                    if (mask & 4) output_ptr[2] ^= input_ptr[bit_in];
-                    if (mask & 8) output_ptr[3] ^= input_ptr[bit_in];
-                    */
-                }
+                const __m256i *restrict input_ptr = input64[i] + segment * 4;
+                uint32_t masks = table32[i * output_count * 4 + j * 4];
+                __m256i bit0 = input_ptr[0];
+                __m256i bit1 = input_ptr[1];
+                __m256i bit2 = input_ptr[2];
+                __m256i bit3 = input_ptr[3];
+                //a = _mm256_xor_si256(a, (masks & (1u <<  0)) ? bit0 : _mm256_setzero_si256());
+                //b = _mm256_xor_si256(b, (masks & (1u <<  1)) ? bit0 : _mm256_setzero_si256());
+                //c = _mm256_xor_si256(c, (masks & (1u <<  2)) ? bit0 : _mm256_setzero_si256());
+                //d = _mm256_xor_si256(d, (masks & (1u <<  3)) ? bit0 : _mm256_setzero_si256());
+                //a = _mm256_xor_si256(a, (masks & (1u <<  4)) ? bit1 : _mm256_setzero_si256());
+                //b = _mm256_xor_si256(b, (masks & (1u <<  5)) ? bit1 : _mm256_setzero_si256());
+                //c = _mm256_xor_si256(c, (masks & (1u <<  6)) ? bit1 : _mm256_setzero_si256());
+                //d = _mm256_xor_si256(d, (masks & (1u <<  7)) ? bit1 : _mm256_setzero_si256());
+                //a = _mm256_xor_si256(a, (masks & (1u <<  8)) ? bit2 : _mm256_setzero_si256());
+                //b = _mm256_xor_si256(b, (masks & (1u <<  9)) ? bit2 : _mm256_setzero_si256());
+                //c = _mm256_xor_si256(c, (masks & (1u << 10)) ? bit2 : _mm256_setzero_si256());
+                //d = _mm256_xor_si256(d, (masks & (1u << 11)) ? bit2 : _mm256_setzero_si256());
+                //a = _mm256_xor_si256(a, (masks & (1u << 12)) ? bit3 : _mm256_setzero_si256());
+                //b = _mm256_xor_si256(b, (masks & (1u << 13)) ? bit3 : _mm256_setzero_si256());
+                //c = _mm256_xor_si256(c, (masks & (1u << 14)) ? bit3 : _mm256_setzero_si256());
+                //d = _mm256_xor_si256(d, (masks & (1u << 15)) ? bit3 : _mm256_setzero_si256());
+                a = cond_xor(a, masks,  0, bit0);
+                b = cond_xor(b, masks,  1, bit0);
+                c = cond_xor(c, masks,  2, bit0);
+                d = cond_xor(d, masks,  3, bit0);
+                a = cond_xor(a, masks,  4, bit1);
+                b = cond_xor(b, masks,  5, bit1);
+                c = cond_xor(c, masks,  6, bit1);
+                d = cond_xor(d, masks,  7, bit1);
+                a = cond_xor(a, masks,  8, bit2);
+                b = cond_xor(b, masks,  9, bit2);
+                c = cond_xor(c, masks, 10, bit2);
+                d = cond_xor(d, masks, 11, bit2);
+                a = cond_xor(a, masks, 12, bit3);
+                b = cond_xor(b, masks, 13, bit3);
+                c = cond_xor(c, masks, 14, bit3);
+                d = cond_xor(d, masks, 15, bit3);
             }
             output_ptr[0] = a;
             output_ptr[1] = b;
@@ -132,6 +172,13 @@ void erasure_code_process_bad(
     }
 }
 
+void* aligned_malloc(size_t size, size_t alignment) {
+    void* ptr = NULL;
+    if (posix_memalign(&ptr, alignment, size) != 0) {
+        return NULL;
+    }
+    return ptr;
+}
 
 #define BYTES (2 * 1024 * 1024)
 
@@ -144,7 +191,7 @@ int main() {
 
     uint8_t *shards[8];
     for (int i = 0; i < 8; i++) {
-        shards[i] = malloc(BYTES);
+        shards[i] = aligned_malloc(BYTES, 32);
         for (int j = 0; j < BYTES; j++) {
             shards[i][j] = i * BYTES + j;
         }
