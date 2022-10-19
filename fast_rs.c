@@ -100,6 +100,7 @@ __attribute__((noinline)) void erasure_code_process(
 
 #define BYTES (1024 * 1024)
 
+/*
 int main() {
     // Configure to encode 5 data shards into 3 parity shards.
     uint8_t table[5 * 3];
@@ -119,16 +120,22 @@ int main() {
         erasure_code_process(table, 5, 3, (const uint8_t**)shards, shards + 5, BYTES);
     }
 }
+*/
 
-/*
 int main() {
-    erasure_code_context_t ctx;
-    erasure_code_init(&ctx, 5, 3);
-
     // Configure to encode 5 data shards into 3 parity shards.
+    uint8_t table[5 * 3];
     int input_x[5] = {0, 1, 2, 3, 4};
     int output_x[3] = {5, 6, 7};
-    erasure_code_configure(&ctx, input_x, output_x);
+    erasure_code_build_table(table, 5, 3, input_x, output_x);
+
+    // Print table.
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 3; j++) {
+            printf("%02x ", table[i * 3 + j]);
+        }
+        printf("\n");
+    }
 
     uint8_t *shards[8 + 3];
     for (int i = 0; i < 8 + 3; i++) {
@@ -136,12 +143,12 @@ int main() {
         for (int j = 0; j < 16; j++)
             shards[i][j] = i + j;
     }
-    erasure_code_process(&ctx, shards, shards + 5, 16);
+    erasure_code_process(table, 5, 3, shards, shards + 5, 16);
 
     // Print out the results.
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 16; j++) {
-            printf("%02x", shards[i][j]);
+            printf("%02x ", shards[i][j]);
         }
         printf("\n");
     }
@@ -149,18 +156,23 @@ int main() {
     // Configure to recover from the last five shards.
     int input_x2[5] = {3, 4, 5, 6, 7};
     int output_x2[3] = {0, 1, 2};
-    erasure_code_configure(&ctx, input_x2, output_x2);
-    erasure_code_process(&ctx, shards + 3, shards + 8, 16);
+    erasure_code_build_table(table, 5, 3, input_x2, output_x2);
+    // Print table.
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 3; j++) {
+            printf("%02x ", table[i * 3 + j]);
+        }
+        printf("\n");
+    }
+    erasure_code_process(table, 5, 3, shards + 3, shards + 8, 16);
 
     printf("Reconstructed first three shards:\n");
     for (int i = 8; i < 8 + 3; i++) {
         for (int j = 0; j < 16; j++) {
-            printf("%02x", shards[i][j]);
+            printf("%02x ", shards[i][j]);
         }
         printf("\n");
     }
 
-    erasure_code_free(&ctx);
     return 0;
 }
-*/
