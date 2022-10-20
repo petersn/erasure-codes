@@ -247,9 +247,17 @@ uint64_t call_jit(
         char * restrict * output_shard_data,
         size_t shard_length
     ) = (uint64_t (*)(const char * restrict *, char * restrict *, size_t))ctx->jit_code;
+
     int degree = get_degree(ctx->polynomial);
-    shard_length /= 32 * degree;
-    return jit_func(input_shard_data, output_shard_data, shard_length);
+    // Check the alignment on the input and output shards.
+    for (int i = 0; i < ctx->input_count; i++)
+        assert(((uintptr_t) input_shard_data[i] & 0x1f) == 0);
+    for (int i = 0; i < ctx->output_count; i++)
+        assert(((uintptr_t) output_shard_data[i] & 0x1f) == 0);
+    assert(shard_length % (32 * degree) == 0);
+    size_t segments = shard_length / (32 * degree);
+
+    return jit_func(input_shard_data, output_shard_data, segments);
 }
 
 void jit_compile_avx2(reed_solomon_t *ctx) {
@@ -293,7 +301,7 @@ void jit_compile_avx2(reed_solomon_t *ctx) {
             );
             // Process a block of inputs.
             for (int input_bit = 0; input_bit < degree; input_bit++) {
-                fprintf(f, "  vmovdqu ymm15, [r9 + %i]\n", 32 * input_bit);
+                fprintf(f, "  vmovdqa ymm15, [r9 + %i]\n", 32 * input_bit);
                 uint32_t mask = ctx->table[i * ctx->output_count * degree + j * degree + input_bit];
                 for (int k = 0; k < degree; k++) {
                     if (!((mask >> k) & 1))
@@ -301,7 +309,7 @@ void jit_compile_avx2(reed_solomon_t *ctx) {
                     if (ymm_has_value[k]) {
                         fprintf(f, "  vpxor ymm%i, ymm%i, ymm15\n", k, k);
                     } else {
-                        fprintf(f, "  vmovdqu ymm%i, ymm15\n", k);
+                        fprintf(f, "  vmovdqa ymm%i, ymm15\n", k);
                         ymm_has_value[k] = 1;
                     }
                 }
@@ -316,7 +324,7 @@ void jit_compile_avx2(reed_solomon_t *ctx) {
         );
         for (int b = 0; b < degree; b++) {
             assert(ymm_has_value[b]);
-            fprintf(f, "  vmovdqu [r10 + %i], ymm%i\n", 32 * b, b);
+            fprintf(f, "  vmovdqa [r10 + %i], ymm%i\n", 32 * b, b);
         }
     }
     fprintf(f,
@@ -439,13 +447,13 @@ void* aligned_malloc(size_t size, size_t alignment) {
     return ptr;
 }
 
-//#define BYTES (1024 * 1024)
-#define BYTES 96
+#define BYTES (2 * 1024 * 1024)
+//#define BYTES 96
 
 int main() {
     // Example usage.
     reed_solomon_t ctx;
-    reed_solomon_init(&ctx, 0b1011/*0x11d*/, 5, 3);
+    reed_solomon_init(&ctx, 0x11d, 5, 3);
 
     //reed_solomon_init(&ctx, 0x11b, 5, 3);
     int input_x[5] = {0, 1, 2, 3, 4};
@@ -468,8 +476,11 @@ int main() {
             shards[i][j] = i < 5 ? i + j : 0;
         }
     }
-    uint64_t result = call_jit(&ctx, shards, shards + 5, BYTES);
-    printf("Result: %lu\n", result);
+    for (int i = 0; i < 10000; i++) {
+        uint64_t result = call_jit(&ctx, shards, shards + 5, BYTES);
+        //printf("Result: %lu\n", result);
+    }
+    return 0;
 
     //reed_solomon_process_no_jit_avx2(
     //    &ctx, (const char**)shards, shards + 5, BYTES
@@ -506,7 +517,7 @@ int main() {
     //reed_solomon_process_no_jit_avx2(
     //    &ctx, (const char**)shards2, shards2 + 5, BYTES
     //);
-    result = call_jit(&ctx, (const char**)shards2, shards2 + 5, BYTES);
+    uint64_t result = call_jit(&ctx, (const char**)shards2, shards2 + 5, BYTES);
     printf("Result: %lu\n", result);
     // Compare the recovered shards.
     int bad = 0;

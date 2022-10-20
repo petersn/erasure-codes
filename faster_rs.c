@@ -146,29 +146,17 @@ void erasure_code_process_bad(
     volatile uint64_t **out = (uint64_t **)output_shard_data;
     size_t segments = shard_length / 24;
     for (int i = 0; i < segments; i++) {
-        out[0][3*i + 0] = data[0][3*i + 0];// ^ data[3][3*i + 0];
-        out[0][3*i + 1] = data[0][3*i + 1];// ^ data[3][3*i + 1];
-        out[0][3*i + 2] = data[0][3*i + 2];// ^ data[3][3*i + 2];
+        out[0][3*i + 0] = data[0][3*i + 0] ^ data[0][3*i + 1] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 1] ^ data[2][3*i + 2] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 0];
+        out[0][3*i + 1] = data[0][3*i + 0] ^ data[1][3*i + 0] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[4][3*i + 1];
+        out[0][3*i + 2] = data[0][3*i + 0] ^ data[0][3*i + 1] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
 
-        out[1][3*i + 0] = data[1][3*i + 0];// ^ data[4][3*i + 0];
-        out[1][3*i + 1] = data[1][3*i + 1];// ^ data[4][3*i + 1];
-        out[1][3*i + 2] = data[1][3*i + 2];// ^ data[4][3*i + 2];
+        out[1][3*i + 0] = data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 2] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 2] ^ data[4][3*i + 0];
+        out[1][3*i + 1] = data[0][3*i + 0] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 0] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 1];
+        out[1][3*i + 2] = data[0][3*i + 1] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 1] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
 
-        out[2][3*i + 0] = data[2][3*i + 0];// ^ data[0][3*i + 0];
-        out[2][3*i + 1] = data[2][3*i + 1];// ^ data[0][3*i + 1];
-        out[2][3*i + 2] = data[2][3*i + 2];// ^ data[0][3*i + 2];
-
-        // out[0][3*i + 0] = data[0][3*i + 0] ^ data[0][3*i + 1] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 1] ^ data[2][3*i + 2] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 0];
-        // out[0][3*i + 1] = data[0][3*i + 0] ^ data[1][3*i + 0] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[4][3*i + 1];
-        // out[0][3*i + 2] = data[0][3*i + 0] ^ data[0][3*i + 1] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
-
-        // out[1][3*i + 0] = data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 2] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 2] ^ data[4][3*i + 0];
-        // out[1][3*i + 1] = data[0][3*i + 0] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 0] ^ data[2][3*i + 2] ^ data[3][3*i + 0] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 1];
-        // out[1][3*i + 2] = data[0][3*i + 1] ^ data[1][3*i + 1] ^ data[1][3*i + 2] ^ data[2][3*i + 1] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
-
-        // out[2][3*i + 0] = data[0][3*i + 1] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[3][3*i + 1] ^ data[4][3*i + 0];
-        // out[2][3*i + 1] = data[0][3*i + 1] ^ data[0][3*i + 2] ^ data[1][3*i + 2] ^ data[2][3*i + 2] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 1];
-        // out[2][3*i + 2] = data[0][3*i + 0] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[2][3*i + 0] ^ data[3][3*i + 0] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
+        out[2][3*i + 0] = data[0][3*i + 1] ^ data[1][3*i + 0] ^ data[1][3*i + 1] ^ data[2][3*i + 0] ^ data[2][3*i + 1] ^ data[3][3*i + 1] ^ data[4][3*i + 0];
+        out[2][3*i + 1] = data[0][3*i + 1] ^ data[0][3*i + 2] ^ data[1][3*i + 2] ^ data[2][3*i + 2] ^ data[3][3*i + 1] ^ data[3][3*i + 2] ^ data[4][3*i + 1];
+        out[2][3*i + 2] = data[0][3*i + 0] ^ data[0][3*i + 2] ^ data[1][3*i + 0] ^ data[2][3*i + 0] ^ data[3][3*i + 0] ^ data[3][3*i + 2] ^ data[4][3*i + 2];
     }
 }
 
